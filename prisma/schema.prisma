@@ -1,0 +1,246 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mongodb"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  ADMIN
+  MANAGEMENT
+  USER
+  HEAD_ADMIN
+}
+
+model Account {
+  id                String  @id @default(auto()) @map("_id") @db.ObjectId
+  type              String
+  provider          String
+  providerAccountId String  @map("provider_account_id")
+  refresh_token     String?
+  access_token      String?
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String?
+  session_state     String?
+
+  userId String @db.ObjectId
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+  @@map("accounts")
+}
+
+model User {
+  id            String    @id @default(auto()) @map("_id") @db.ObjectId
+  name          String
+  email         String    @unique
+  emailVerified DateTime? @map("email_verified")
+  password      String?
+  image         String?
+  contactNumber String?
+  role          UserRole? @default(USER)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  isOnboarded Boolean   @default(false)
+  accounts    Account[]
+
+  //added
+  notifications Notification[]
+  requests      Request[]
+  infectedContacts Contact[]
+  exposedContacts ContactUser[]
+
+  //user
+  userProfile UserProfile?
+
+  //management
+  managementProfile ManagementProfile?
+
+  @@map("users")
+}
+
+model VerificationToken {
+  id      String   @id @default(auto()) @map("_id") @db.ObjectId
+  email   String
+  token   String   @unique
+  expires DateTime
+
+  @@unique([email, token])
+  @@map("verification-tokens")
+}
+
+model PasswordResetToken {
+  id      String   @id @default(auto()) @map("_id") @db.ObjectId
+  email   String
+  token   String   @unique
+  expires DateTime
+
+  @@unique([email, token])
+  @@map("password-reset-tokens")
+}
+
+// ACTUAL INVENTORY
+//    |
+//    |
+//    |
+//    |
+//    |
+//    |
+//   \ /
+//    V
+
+enum CovidStatus {
+  POSITIVE
+  NEGATIVE
+  EXPOSED
+}
+
+model UserProfile {
+  id String @id @default(auto()) @map("_id") @db.ObjectId
+
+  userId String @unique @db.ObjectId
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  fname     String
+  lname     String
+  gender    String
+  birthDate DateTime
+
+  regCode     String
+  provCode    String
+  citymunCode String
+  brgyCode    String
+
+  status  CovidStatus @default(NEGATIVE)
+  history History[]
+  dateTestedPositive DateTime?
+
+  @@index([regCode, provCode, citymunCode, brgyCode]) // Optimizes searches by location
+  @@map("user-profiles")
+}
+
+model ManagementProfile {
+  id String @id @default(auto()) @map("_id") @db.ObjectId
+
+  userId String @unique @db.ObjectId
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  regCode          String
+  provCode         String
+  citymunCode      String
+  brgyCode         String
+  daysWithoutCovid Int       @default(0) // TODO: to be removed
+  history          History[]
+
+  @@map("management-profiles")
+}
+
+model History {
+  id String @id @default(auto()) @map("_id") @db.ObjectId
+
+  userId String      @db.ObjectId
+  user   UserProfile @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  managementId String            @db.ObjectId
+  management   ManagementProfile @relation(fields: [managementId], references: [id], onDelete: Cascade)
+
+  date DateTime
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId])
+  @@index([date])
+  @@map("history")
+}
+
+enum NotificationType {
+  DEFAULT
+  COVID
+}
+
+model Notification {
+  id String @id @default(auto()) @map("_id") @db.ObjectId
+
+  userId String @db.ObjectId
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  date    DateTime
+  title   String
+  message String
+  type    NotificationType @default(DEFAULT)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId])
+  @@index([date])
+  @@map("notifications")
+}
+
+enum RequestStatus {
+  PENDING
+  QUALIFIED
+  DISQUALIFIED
+}
+
+model Request {
+  id String @id @default(auto()) @map("_id") @db.ObjectId
+
+  userId String @db.ObjectId
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  dateOfSymptoms DateTime
+  dateOfTesting  DateTime
+  symptoms       String
+  medicalImages  String[]
+  status         RequestStatus @default(PENDING)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId])
+  @@map("requests")
+}
+
+model Contact {
+  id String @id @default(auto()) @map("_id") @db.ObjectId
+
+  userInfectedId String @db.ObjectId
+  user           User   @relation(fields: [userInfectedId], references: [id], onDelete: Cascade)
+
+  usersExposed ContactUser[] // Explicit join table for many-to-many relationship
+
+  date       DateTime
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@map("contacts")
+}
+
+model ContactUser {
+  id        String  @id @default(auto()) @map("_id") @db.ObjectId
+  contactId String  @db.ObjectId
+  contact   Contact @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  
+  userId String @db.ObjectId
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("contact_users")
+  @@unique([contactId, userId]) // Ensure unique combinations of contact and user
+}
+
+
+//add ng exposed status [GUDS]
+//request wt contactNumber [GUDS]
+//hide yung medical after accept/deny [GUDS]
+//all in one btn check of manual positive to negative 14 days [GUDS]
+//api contact [GUDS]
+//export contact list [GUDS]
+//admin > headadmin [GUDS]
