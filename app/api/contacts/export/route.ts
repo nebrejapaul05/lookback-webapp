@@ -77,6 +77,7 @@ export async function GET(request: Request) {
                       provCode: true,
                       citymunCode: true,
                       brgyCode: true,
+                      status: true,
                     },
                   },
                 },
@@ -94,6 +95,7 @@ export async function GET(request: Request) {
         user: {
           ...d.user,
           userProfile: {
+            ...d.user.userProfile,
             regCode: getRegionDescription(d.user.userProfile?.regCode ?? ""),
             provCode: getProvinceDescription(
               d.user.userProfile?.provCode ?? ""
@@ -111,6 +113,7 @@ export async function GET(request: Request) {
           user: {
             ...dd.user,
             userProfile: {
+              ...dd.user.userProfile,
               regCode: getRegionDescription(dd.user.userProfile?.regCode ?? ""),
               provCode: getProvinceDescription(
                 dd.user.userProfile?.provCode ?? ""
